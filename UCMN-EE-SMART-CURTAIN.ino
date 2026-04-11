@@ -1,30 +1,24 @@
 #include <Arduino.h>
-#include <Wire.h>       // I2C – BH1750  (SDA=pin 20, SCL=pin 21 on Mega)
-#include <BH1750.h>     // Library Manager: "BH1750" by Christopher Laws
-#include <DHT.h>        // Library Manager: "DHT sensor library" by Adafruit
+#include <Wire.h>     
+#include <BH1750.h>     
+#include <DHT.h>       
 #include "motorControl.h"
 #include "lcdDisplay.h"
 
 // ============================================================
 //  PIN DEFINITIONS
 // ============================================================
-#define DHT_PIN   48     // DHT22 DATA → Mega pin 48
+#define DHT_PIN   48   
 #define DHT_TYPE  DHT22
 
-// BH1750: SDA → pin 20, SCL → pin 21, VCC → 5V, GND → GND
-// DHT22:  DATA → pin 48, VCC → 5V, GND → GND
+const int btnForward = 45;
+const int btnReverse = 46;
 
-// ============================================================
-//  OBJECTS
-// ============================================================
 MOTORCONTROL stepper;
 LCDDISPLAY   lcd;
 DHT          dht(DHT_PIN, DHT_TYPE);
 BH1750       lightMeter;
 
-// ============================================================
-//  SENSOR STATE
-// ============================================================
 float    sensorTemp  = 0.0f;
 float    sensorHumid = 0.0f;
 float    sensorLux   = 0.0f;
@@ -39,7 +33,6 @@ void readSensors() {
   float t = dht.readTemperature();
   float h = dht.readHumidity();
 
-  // Only reject NaN – any non-NaN value from DHT22 is stored
   if (!isnan(t)) sensorTemp  = t;
   if (!isnan(h)) sensorHumid = h;
 
@@ -77,20 +70,22 @@ void setup() {
   readSensors();
   lcd.showScreen(sensorTemp, sensorHumid, sensorLux);
 
+  pinMode(btnForward, INPUT_PULLUP);
+  pinMode(btnReverse, INPUT_PULLUP);
+
+  stepper.initStepper();
   Serial.println(F("Ready. Send ON / OFF to control curtains."));
 }
 
-// ============================================================
-//  LOOP
-// ============================================================
 void loop() {
 
-  // ── Serial motor commands ─────────────────────────────────
   if (Serial.available()) {
     String cmd = Serial.readStringUntil('\n');
     cmd.trim();
-    if      (cmd == "ON")  stepper.upWard();
-    else if (cmd == "OFF") stepper.downWard();
+    if      (cmd == "OPEN")  stepper.manualOpen();
+    else if (cmd == "BLOCK") stepper.manualSunBlock();
+    else if (cmd == "CLOSE") stepper.manualClose();
+    else if (cmd == "STOP")  stepper.stopMotor();
   }
 
   // ── Sensor poll ───────────────────────────────────────────
@@ -98,9 +93,19 @@ void loop() {
   if (now - lastReadMs >= READ_INTERVAL) {
     lastReadMs = now;
     readSensors();
+
+    stepper.checkAndControl(sensorTemp, sensorHumid, sensorLux);
   }
 
-  // ── LCD refresh (animation self-timed inside showScreen) ──
+  if (digitalRead(btnForward) == LOW) {
+    Serial.println("Forwards");
+    stepper.manualForwardStep();
+  } 
+  if (digitalRead(btnReverse) == LOW) {
+    Serial.println("Reverse");
+    stepper.manualReverseStep();
+  } 
+
   lcd.showScreen(sensorTemp, sensorHumid, sensorLux);
 
   delay(20);
