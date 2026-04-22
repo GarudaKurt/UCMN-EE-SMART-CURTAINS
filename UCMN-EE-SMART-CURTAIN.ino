@@ -1,14 +1,11 @@
 #include <Arduino.h>
-#include <Wire.h>     
-#include <BH1750.h>     
-#include <DHT.h>       
+#include <Wire.h>
+#include <BH1750.h>
+#include <DHT.h>
 #include "motorControl.h"
 #include "lcdDisplay.h"
 
-// ============================================================
-//  PIN DEFINITIONS
-// ============================================================
-#define DHT_PIN   48   
+#define DHT_PIN   48
 #define DHT_TYPE  DHT22
 
 const int btnForward = 45;
@@ -23,30 +20,24 @@ float    sensorTemp  = 0.0f;
 float    sensorHumid = 0.0f;
 float    sensorLux   = 0.0f;
 
-uint32_t lastReadMs  = 0;
-#define  READ_INTERVAL  2000UL   // poll every 2 seconds
+uint32_t lastReadMs = 0;
+uint32_t lastLcdMs  = 0;              // ← declared ONCE here
 
-// ============================================================
-//  READ SENSORS
-// ============================================================
+#define READ_INTERVAL  2000UL
+#define LCD_INTERVAL    200UL         // ← declared ONCE here
+
 void readSensors() {
   float t = dht.readTemperature();
   float h = dht.readHumidity();
-
   if (!isnan(t)) sensorTemp  = t;
   if (!isnan(h)) sensorHumid = h;
-
   float lux = lightMeter.readLightLevel();
   if (lux >= 0.0f) sensorLux = lux;
-
-  Serial.print(F("T="));     Serial.print(sensorTemp,  1);
-  Serial.print(F("C  H="));  Serial.print(sensorHumid, 1);
+  Serial.print(F("T="));      Serial.print(sensorTemp,  1);
+  Serial.print(F("C  H="));   Serial.print(sensorHumid, 1);
   Serial.print(F("%  Lux=")); Serial.println(sensorLux, 1);
 }
 
-// ============================================================
-//  SETUP
-// ============================================================
 void setup() {
   Serial.begin(115200);
   Serial.println(F("Smart Curtains v1.0 - Booting..."));
@@ -63,22 +54,19 @@ void setup() {
   Serial.println(F("DHT22 OK - waiting 2s to stabilise..."));
   delay(2000);
 
-  stepper.initStepper();
+  stepper.initStepper();             // ← only once
 
   lcd.begin();
-
   readSensors();
   lcd.showScreen(sensorTemp, sensorHumid, sensorLux);
 
   pinMode(btnForward, INPUT_PULLUP);
   pinMode(btnReverse, INPUT_PULLUP);
 
-  stepper.initStepper();
-  Serial.println(F("Ready. Send ON / OFF to control curtains."));
+  Serial.println(F("Ready."));
 }
 
 void loop() {
-
   if (Serial.available()) {
     String cmd = Serial.readStringUntil('\n');
     cmd.trim();
@@ -88,25 +76,27 @@ void loop() {
     else if (cmd == "STOP")  stepper.stopMotor();
   }
 
-  // ── Sensor poll ───────────────────────────────────────────
   uint32_t now = millis();
+
   if (now - lastReadMs >= READ_INTERVAL) {
     lastReadMs = now;
     readSensors();
-
     stepper.checkAndControl(sensorTemp, sensorHumid, sensorLux);
   }
 
-  if (digitalRead(btnForward) == LOW) {
-    Serial.println("Forwards");
+  bool fwdHeld = (digitalRead(btnForward) == LOW);
+  bool revHeld = (digitalRead(btnReverse) == LOW);
+
+  if (fwdHeld) {
     stepper.manualForwardStep();
-  } 
-  if (digitalRead(btnReverse) == LOW) {
-    Serial.println("Reverse");
+  } else if (revHeld) {
     stepper.manualReverseStep();
-  } 
+  } else {
+    stepper.disableDriver();
+  }
 
-  lcd.showScreen(sensorTemp, sensorHumid, sensorLux);
-
-  delay(20);
+  if (now - lastLcdMs >= LCD_INTERVAL) {
+    lastLcdMs = now;
+    lcd.showScreen(sensorTemp, sensorHumid, sensorLux);
+  }
 }

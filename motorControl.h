@@ -12,10 +12,11 @@
 // 1/8  step  (SW3=ON,  SW4=ON ) → 1600
 // 1/16 step                     → 3200
 // 1/32 step                     → 6400
-#define STEPS_PER_REV     1600    // <-- change to match your SW3/SW4
+#define STEPS_PER_REV   1600  // <-- change to match your SW3/SW4
 
-#define STEPS_FULL_OPEN   (STEPS_PER_REV)                            // 180°
-#define STEPS_SUN_BLOCK   ((int)((75.0f / 180.0f) * STEPS_PER_REV)) // 75°
+#define STEPS_FULL_OPEN   (STEPS_PER_REV * 13)       
+#define STEPS_FULL_CLOSE   (STEPS_PER_REV * 7)                          // 180°
+#define STEPS_SUN_BLOCK    (STEPS_PER_REV * 9)    //((int)((75.0f / 180.0f) * STEPS_PER_REV)) // 75°
 #define STEPS_CLOSED      0
 
 #define STEP_DELAY_US     100     // pulse speed – lower = faster
@@ -29,8 +30,8 @@
 // ============================================================
 //  TEMP / HUMIDITY THRESHOLDS
 // ============================================================
-#define TEMP_HOT_ABOVE    35.0f   // temp >= 35°C  ─┐ both must be
-#define HUMID_HIGH_ABOVE  75.0f   // humid >= 75%  ─┘ true → open fully
+#define TEMP_HOT_ABOVE    30.0f   // temp >= 35°C  ─┐ both must be
+#define HUMID_HIGH_ABOVE  63.0f   // humid >= 75%  ─┘ true → open fully
 
 // ============================================================
 //  BLIND STATES
@@ -64,7 +65,7 @@ class MOTORCONTROL {
     void stopMotor();
     void manualForwardStep(); 
     void manualReverseStep();
-
+    void disableDriver();
     BlindState getState()  { return _currentState; }
 
   private:

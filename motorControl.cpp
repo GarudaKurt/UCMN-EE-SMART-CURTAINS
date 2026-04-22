@@ -31,7 +31,7 @@ void MOTORCONTROL::initStepper() {
   _currentState = BLIND_UNKNOWN;
 
   manualClose();                      // physically drive to 0° (closed)
-
+  //manualOpen();
   Serial.println(F("Blind homed to 0deg (closed) on boot"));
 }
 
@@ -43,7 +43,7 @@ void MOTORCONTROL::checkAndControl(float temp, float humid, float lux) {
   // ── Evaluate conditions in priority order ─────────────────
 
   // Priority 1: Hot AND humid → open fully for ventilation
-  bool isHotAndHumid = (temp >= TEMP_HOT_ABOVE) && (humid >= HUMID_HIGH_ABOVE);
+  bool isHotAndHumid = (temp >= TEMP_HOT_ABOVE);
 
   // Priority 2: Very bright sun → tilt to block glare
   bool isTooSunny = (lux > LUX_BLOCK_ABOVE);
@@ -54,15 +54,24 @@ void MOTORCONTROL::checkAndControl(float temp, float humid, float lux) {
   // ── Determine desired state ───────────────────────────────
   BlindState desired;
 
-  if (isHotAndHumid) {
-    desired = BLIND_OPEN;       // ventilation takes top priority
-  } else if (isTooSunny) {
-    desired = BLIND_SUNBLOCK;   // block harsh sun
-  } else if (isTooDark) {
+  // if (temp > 30.0) {
+  //   desired = BLIND_OPEN;       // ventilation takes top priority
+  // } else if (temp > 27 && temp < 29) {
+  //   desired = BLIND_SUNBLOCK;   // block harsh sun
+  // } else if (temp  > 20 && temp < 26) {
+  //   desired = BLIND_OPEN;       // let light in
+  // } else {
+  //   return;                     // comfortable zone – do nothing
+  // }
+
+  if(temp < 26)
     desired = BLIND_OPEN;       // let light in
-  } else {
-    return;                     // comfortable zone – do nothing
-  }
+  else if(temp < 29)
+    desired = BLIND_SUNBLOCK;   // block harsh sun
+  else if (temp < 45)
+    desired = BLIND_CLOSED;       // let light in
+  else
+    return;
 
   // ── Only move if state actually needs to change ───────────
   if (desired == _currentState) return;
@@ -87,6 +96,11 @@ void MOTORCONTROL::checkAndControl(float temp, float humid, float lux) {
       Serial.println(F("AUTO: High light -> sun-block position (75deg)"));
       moveTo(STEPS_SUN_BLOCK);
       _currentState = BLIND_SUNBLOCK;
+      break;
+    case BLIND_CLOSED:
+      Serial.println(F("AUTO: High light -> CLOSE position (0deg)"));
+      moveTo(STEPS_CLOSED);
+      _currentState = BLIND_CLOSED;
       break;
 
     default:
@@ -129,22 +143,26 @@ void MOTORCONTROL::stopMotor() {
 void MOTORCONTROL::manualForwardStep() {
   digitalWrite(ENABLE_PIN, LOW);
   digitalWrite(DIR_PIN, HIGH);
+  delayMicroseconds(5);              // ← DIR settle time before pulse
   digitalWrite(STEP_PIN, HIGH);
   delayMicroseconds(STEP_DELAY_US);
   digitalWrite(STEP_PIN, LOW);
   delayMicroseconds(STEP_DELAY_US);
-  digitalWrite(ENABLE_PIN, HIGH);  // disable after each jog step
   _currentSteps++;
+}
+
+void MOTORCONTROL::disableDriver() {
+  digitalWrite(ENABLE_PIN, HIGH);
 }
 
 void MOTORCONTROL::manualReverseStep() {
   digitalWrite(ENABLE_PIN, LOW);
   digitalWrite(DIR_PIN, LOW);
+  delayMicroseconds(5);              // ← DIR settle time before pulse
   digitalWrite(STEP_PIN, HIGH);
   delayMicroseconds(STEP_DELAY_US);
   digitalWrite(STEP_PIN, LOW);
   delayMicroseconds(STEP_DELAY_US);
-  digitalWrite(ENABLE_PIN, HIGH);  // disable after each jog step
   _currentSteps--;
 }
 
